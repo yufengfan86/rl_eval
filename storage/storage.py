@@ -49,7 +49,7 @@ class Storage(object):
         step_ = self.worker_step_map[worker]
         self.obs_vec[worker, step_+1] = obs
         self.actions_vec[worker, step_] = action
-        self.hidden_states_vec[worker, step_] = hidden_state
+        self.hidden_states_vec[worker, step_+1] = hidden_state
         self.rewards_vec[worker, step_] = reward
         self.values_vec[worker, step_] = value
         self.log_probs_vec[worker, step_] = log_probs

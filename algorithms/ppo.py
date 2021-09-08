@@ -55,7 +55,7 @@ class PPO(object):
         advantage_vec = (advantage_vec - advantage_vec.mean()) / (advantage_vec.std() + 1e-5)
 
         for epoch in range(self.update_epochs):
-            sample_generator = storage.sample_generator(advantage_vec, 5)
+            sample_generator = storage.sample_generator(advantage_vec, self.mini_batch_size)
 
             for sample in sample_generator:
                 obs_batch, hidden_states_batch, actions_batch, values_batch, returns_batch, masks_batch, \
@@ -79,3 +79,4 @@ class PPO(object):
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+                self.optimizer.step()

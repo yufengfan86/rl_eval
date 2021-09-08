@@ -29,4 +29,9 @@
          The car position is more than 0.45
          Episode length is greater than 200
 
+    问题: 
+    1. 结束状态如何表示?
+    done == True or info 中显示超过最长补数
     
+    2. 如何设置评价指标?
+    ...
