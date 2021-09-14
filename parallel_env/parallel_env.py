@@ -12,6 +12,70 @@ import multiprocessing as mp
 from environments.basic import func_generate_env
 
 
+class PEnv(object):
+    # 应该接受一批pipe。
+    # 数据流：每个pipe向另一端发送指令，并接受相应的返回值
+    # reset：发送reset指令， 并获取每个env（eid）的初始化状态， 返回时， 应该已经是按照顺序打包好的数据
+    # step： 发送step指令，及每个eid对应的action，所以， action需要按顺序发送， 返回时， 依旧是按顺序打包好的数据
+
+    def __init__(self,
+                 pipe_list,
+                 ):
+        self.pipe_list = pipe_list
+
+    def reset(self):
+        for pipe in self.pipe_list:  # 这里应该是异步的？还是串行的？如果是串行的，那么似乎没必要使用多进程。
+            p = mp.Process(target=self._reset, args=(pipe, ))
+            p.start()
+
+        obe_list = []
+        for pipe in self.pipe_list:
+            obe_list.append(pipe.recv())
+
+        ob_list = []
+        for i in range(len(obe_list)):
+            ob_list.append(obe_list[i][1])
+
+        return np.array(ob_list)
+
+    def _reset(self, pipe):
+        pipe.send(["reset", None])
+
+    def step(self,
+             actions: np.ndarray
+             ):
+        # 这里的actions应该是已经按照eid排序好的。
+        for eid, pipe in enumerate(self.pipe_list):  # 这里应该是异步的？还是串行的？如果是串行的，那么似乎没必要使用多进程。
+            p = mp.Process(target=self._step, args=(pipe, actions[eid]))
+            p.start()
+
+        datae_list = []
+        for pipe in self.pipe_list:
+            datae_list.append(pipe.recv())
+
+        data_list = []
+        next_ob_list = []
+        reward_list = []
+        done_list = []
+        info_list = []
+        for i in range(len(datae_list)):
+            next_ob_list.append(datae_list[i][1][0])
+            reward_list.append(datae_list[i][1][1])
+            done_list.append(datae_list[i][1][2])
+            info_list.append(datae_list[i][1][3])
+
+        return np.array(next_ob_list), np.array(reward_list), np.array(done_list), np.array(info_list)
+
+    def _step(self,
+              pipe,
+              action
+              ):
+        pipe.send(["step", action])
+
+    def __len__(self):
+        return len(self.pipe_list)
+
+
 def worker(pipe, remote_pipe, env, eid):
 
     def _step(env, action):
@@ -69,40 +133,22 @@ def make_parallel_envs(env_name, num_workers):
 
 if __name__ == '__main__':
     # 验证pipe是否两端都可以进行数据的接受与传送(可以)
-    # pipe, remote_pipe = mp.Pipe()
-    #
     env = func_generate_env("CartPole-v0")
-    #
-    # p = mp.Process(target=worker, args=(remote_pipe, pipe, env))
-    #
-    # p.start()
-    #
-    # remote_pipe.close()
-    #
-    # pipe.send(["reset", None])
-    # obs = pipe.recv()
-    # print(obs)
-    #
-    # while True:
-    #     pipe.send(["render", None])
-    #     data = env.action_space.sample()
-    #     pipe.send(["step", data])
-    #
-    #     info = pipe.recv()
-    #     print(info)
 
-    # pipe.send(["close", None])
-    pipe_list = make_parallel_envs("CartPole-v0", 2)
+    envs = make_parallel_envs("CartPole-v0", 2)
 
-    for pipe in pipe_list:
-        pipe.send(["reset", None])
+    obs = envs.reset()
 
     while True:
-        data = env.action_space.sample()
-        pipe_list[0].send(["step", data])
-        print(pipe_list[0].recv())
-        pipe_list[1].send(["step", data])
-        print(pipe_list[1].recv())
+        actions = []
+        for i in range(len(envs)):
+            actions.append(env.action_space.sample())
+
+        actions = np.array(actions)
+
+        obs, rewards, dones, infos = envs.step(actions)
+
+        print(dones)
 
 
 
